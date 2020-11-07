@@ -4,7 +4,7 @@ local data={
 
 local inode = require "inode"
 
-local f,const,cache = inode(nil,nil,data)
+local f,const,cacheisempty = inode(nil,nil,data)
 assert(f.list[const.raw] == data.list)
 assert(f.list[1][const.raw] == data.list[1])
 assert(f.list[2][const.raw] == data.list[2])
@@ -19,9 +19,6 @@ assert(f.list[const[".."]] == f)
 assert(f.list[1][const[".."]] == f.list)
 assert(f.list[2][const.raw] == data.list[2])
 
-local function isempty(cache)
-	return not next(cache)
-end
 -- usefull for lua 5.1 / luajit 2.0
 local _pairs = f.list[const.pairs]
 for k,v in _pairs(f.list) do
@@ -32,9 +29,8 @@ for k,v in pairs(f.list) do
 	print(".", k, v[const.raw])
 end
 
-
-assert(isempty(cache)==false)
+assert(cacheisempty()==false)
 f=nil collectgarbage()
-assert(isempty(cache)==true)
+assert(cacheisempty()==true)
 
 --session = { root=fs, dir=dir, pwd=[...], cache=... }
