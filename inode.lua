@@ -22,24 +22,6 @@ end
 local const={[".."]=__,["."]=_,["raw"]=RAW,["pairs"]=PAIRS,["ipairs"]=IPAIRS}
 const.DEBUG=DEBUG
 
----- cache system ----
-	local function new()
-		local cache = setmetatable({},{__mode="v"}) -- indexed on the original table (o_current)
-		return cache, function() return not next(cache) end
-	end
-	local function get(cache, o_current)
-		local p_current = cache[o_current]
-		return p_current
-	end
-	local function set(cache, o_current, p_current)
-		cache[o_current] = p_current
-		return p_current
-	end
-	local function unset(cache, o_current)
-		cache[o_current] = nil
-	end
----- /cache system ----
-
 local function __pairs(proxy)
 	local function _next(proxy, k)
 		local orig = proxy[RAW]
@@ -65,7 +47,6 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 	assert(gcache)
 	local p_current
 	if type(o_current)=="table" then
-		--p_current = get(gcache, o_current)
 		p_current = gcache[o_current]
 --if p_current then print("","gcache", gcache, "read ["..name.."]: "..tostring(p_current)) end
 		if p_current then return p_current end
@@ -83,7 +64,7 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 		end
 	end
 	p_current = {}
-	local new_gcache = setmetatable({},{__mode="v"}) -- indexed on the original table (o_current)
+	--local new_gcache = setmetatable({},{__mode="v"}) -- indexed on the original table (o_current)
 	local new_cachep = setmetatable({},{__mode="v"}) -- indexed on the original key (usually string), will store p_current
 --print("SPY new_gcache", new_gcache, "new_cachep", new_cachep)
 	local mt = {}
@@ -104,7 +85,13 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 		elseif k==REQ then
 			return function(secret) return SECRET==secret end
 		elseif k==DEBUG then
-			return {cache=new_gcache, cachep=new_cachep}
+			return {
+				cache=gcache,
+				cachep=new_cachep,
+				cacheisempty=function()
+					return not next(gcache)
+				end,
+			}
 		end
 		local o_sub = o_current[k]
 		if o_sub == nil then
@@ -115,7 +102,7 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 		end
 		--if type(o_sub)~="table" then return o_sub end -- no proxy for non-table object
 
-		return internal_inode(p_current, k, o_sub, new_gcache, new_cachep)
+		return internal_inode(p_current, k, o_sub, gcache, new_cachep)
 	end
 	function mt.__newindex(_self,k,v)
 		assert(_self==p_current,"cheat!")
@@ -142,8 +129,8 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 end
 local function pub_inode(o_current)
 	assert(o_current)
-	local cache, isempty = new()
-	return internal_inode(nil, "", o_current, cache, nil), const, isempty
+	local gcache = setmetatable({},{__mode="v"}) -- indexed on the original table (o_current)
+	return internal_inode(nil, "", o_current, gcache, nil), const
 end
 
 do
