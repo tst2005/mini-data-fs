@@ -2,10 +2,10 @@
 local __={}	-- ".."
 local _={}	-- "."
 local RAW={}	-- rawget
-local KEYS={}	--
-local INDEX={}	--
+local PAIRS={}	--
+local IPAIRS={}	--
 
-local const={[".."]=__,["."]=_,["raw"]=RAW,["keys"]=KEYS,["index"]=INDEX}
+local const={[".."]=__,["."]=_,["raw"]=RAW,["pairs"]=PAIRS,["ipairs"]=IPAIRS}
 
 ---- cache system ----
 local function new()
@@ -26,6 +26,27 @@ local function set(cache, v, o)
 end
 ---- /cache system ----
 
+local function __pairs(proxy)
+	local function _next(proxy, k)
+		local orig = proxy[RAW]
+		local v
+		k, v = next(orig, k)
+		if nil~=v then
+			return k, proxy[k] -- do not expose v without wrapper
+		end
+	end
+	return _next, proxy, nil
+end
+
+local function __ipairs(proxy)
+	local function _next(proxy, i)
+		i = i + 1
+		local v = proxy[i]
+		if nil~=v then return i, v end
+	end
+	return _next, proxy, 0
+end
+
 local function inode(parent, name, current, cache)
 	assert(cache)
 	local c = get(cache, current)
@@ -41,10 +62,10 @@ local function inode(parent, name, current, cache)
 			--print("parent", parent, "current", current, "name", name,])
 			if parent == nil then return current end
 			return parent[RAW][name]
-		elseif k==KEYS then
-			-- TODO
-		elseif k==INDEX then
-			-- TODO
+		elseif k==PAIRS then
+			return __pairs
+		elseif k==IPAIRS then
+			return __ipairs
 		end
 		local v = current[k]
 		if v == nil then return nil end
@@ -56,6 +77,8 @@ local function inode(parent, name, current, cache)
 		c2 = inode(t, k, v, cache)
 		return set(cache, v, c2)
 	end
+	mt.__pairs = __pairs
+	mt.__ipairs = __ipairs
 	setmetatable(t,mt)
 	return set(cache, current, t)
 end

@@ -22,6 +22,17 @@ assert(f.list[2][const.raw] == data.list[2])
 local function isempty(cache)
 	return not next(cache)
 end
+-- usefull for lua 5.1 / luajit 2.0
+local _pairs = f.list[const.pairs]
+for k,v in _pairs(f.list) do
+	print(".", k, v[const.raw])
+end
+-- pairs and ipairs is ok since lua 5.2
+for k,v in pairs(f.list) do
+	print(".", k, v[const.raw])
+end
+
+
 assert(isempty(cache)==false)
 f=nil collectgarbage()
 assert(isempty(cache)==true)
