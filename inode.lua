@@ -6,6 +6,7 @@ local PAIRS={}	--
 local IPAIRS={}	--
 local DEBUG={}	--
 
+--[=[
 -- how to check if it is a proxy (internal use)
 local REQ={}
 local SECRET={}
@@ -17,6 +18,12 @@ local function isproxy(v)
 			return true
 		end
 	end
+end
+]=]--
+
+local ISPROXY={}
+local function isproxy(v)
+	return type(v)=="table" and v[ISPROXY]==true
 end
 
 local const={[".."]=__,["."]=_,["raw"]=RAW,["pairs"]=PAIRS,["ipairs"]=IPAIRS}
@@ -64,9 +71,7 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 		end
 	end
 	p_current = {}
-	--local new_gcache = setmetatable({},{__mode="v"}) -- indexed on the original table (o_current)
 	local new_cachep = setmetatable({},{__mode="v"}) -- indexed on the original key (usually string), will store p_current
---print("SPY new_gcache", new_gcache, "new_cachep", new_cachep)
 	local mt = {}
 	function mt.__index(_self,k)
 		assert(_self==p_current,"cheat!")
@@ -82,8 +87,10 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 			return __pairs
 		elseif k==IPAIRS then
 			return __ipairs
-		elseif k==REQ then
-			return function(secret) return SECRET==secret end
+--		elseif k==REQ then
+--			return function(secret) return SECRET==secret end
+		elseif k==ISPROXY then
+			return true
 		elseif k==DEBUG then
 			return {
 				cache=gcache,
@@ -141,7 +148,6 @@ do
 	assert(f[1]==f[1])
 	assert(f[1]~=f[2])
 	x,f=nil,nil
-
 end
 
 return pub_inode
