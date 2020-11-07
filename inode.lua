@@ -12,18 +12,27 @@ local function new()
 	local cache=setmetatable({},{__mode="v"})
 	return cache
 end
-local function get(cache, o)
-	local v = cache[o]
+local function get(cache, k)
+	local v = cache[k]
 	if v then
 		return v
 	end
 end
-local function set(cache, v, o)
+local function set(cache, k, v)
 	if type(v)=="table" then
-		cache[v] = o
+		cache[k] = v
 	end
-	return o
+	return v
 end
+--local function cacheblackbox()
+--	local cache = new()
+--	return function(k, f)
+--		if f==nil then
+--			return get(cache, k)
+--		end
+--		return set(cache, k, f())
+--	end
+--end
 ---- /cache system ----
 
 local function __pairs(proxy)
@@ -77,6 +86,9 @@ local function inode(parent, name, current, cache)
 		c2 = inode(t, k, v, cache)
 		return set(cache, v, c2)
 	end
+--	function mt.__newindex(self,k_,v_)
+--		-- v_ est ou n'est pas un proxy ?
+--	end
 	mt.__pairs = __pairs
 	mt.__ipairs = __ipairs
 	setmetatable(t,mt)
