@@ -4,43 +4,40 @@ local _={}	-- "."
 local RAW={}	-- rawget
 local PAIRS={}	--
 local IPAIRS={}	--
+local DEBUG={}	--
+
+-- how to check if it is a proxy (internal use)
+local REQ={}
+local SECRET={}
+--local ACK={}
+local function isproxy(v)
+	if type(v)=="table" then
+		local super,check = v[REQ]
+		if super==nil and type(check)=="function" and check(SECRET)==true then
+			return true
+		end
+	end
+end
 
 local const={[".."]=__,["."]=_,["raw"]=RAW,["pairs"]=PAIRS,["ipairs"]=IPAIRS}
+const.DEBUG=DEBUG
 
 ---- cache system ----
-local cacheblackbox
-do
 	local function new()
-		local cache=setmetatable({},{__mode="v"})
+		local cache = setmetatable({},{__mode="v"}) -- indexed on the original table (o_current)
 		return cache, function() return not next(cache) end
 	end
-	local function get(cache, k)
-		local v = cache[k]
-		if v then
-			return v
-		end
+	local function get(cache, o_current)
+		local p_current = cache[o_current]
+		return p_current
 	end
-	local function set(cache, k, v)
-		if type(v)=="table" then
-			cache[k] = v
-		end
-		return v
+	local function set(cache, o_current, p_current)
+		cache[o_current] = p_current
+		return p_current
 	end
-	local function blackbox()
-		local cache,isempty = new()
-		local function getset(k, v)
-			if v==nil then
-				return get(cache, k)
-			end
-			if type(v)=="function" then
-				v=v()
-			end
-			return set(cache, k, v)
-		end
-		return getset, isempty
+	local function unset(cache, o_current)
+		cache[o_current] = nil
 	end
-	cacheblackbox = blackbox
-end
 ---- /cache system ----
 
 local function __pairs(proxy)
@@ -64,13 +61,34 @@ local function __ipairs(proxy)
 	return _next, proxy, 0
 end
 
-local function inode(p_parent, name, o_current, cachegetset)
-	assert(cachegetset)
-	local p_current = cachegetset(o_current)
-	if p_current then return p_current end
-	p_current={}
-	local mt ={}
-	function mt.__index(self,k)
+local function internal_inode(p_parent, name, o_current, gcache, parentcache)
+	assert(gcache)
+	local p_current
+	if type(o_current)=="table" then
+		--p_current = get(gcache, o_current)
+		p_current = gcache[o_current]
+--if p_current then print("","gcache", gcache, "read ["..name.."]: "..tostring(p_current)) end
+		if p_current then return p_current end
+	elseif parentcache then
+		-- o_current is a value like string/number/boolean
+		assert(name)
+		assert(type(p_parent)=="table")
+		assert(type(name)=="string" or type(name)=="number", "WARNING: table key is a "..type(name))
+		p_current = parentcache[name]
+--if p_current then print("", "cachep", parentcache, "read ["..name.."]: "..tostring(p_current)) end
+		if p_current then return p_current end
+	else
+		if type(o_current)~="table" then
+			assert(parentcache)
+		end
+	end
+	p_current = {}
+	local new_gcache = setmetatable({},{__mode="v"}) -- indexed on the original table (o_current)
+	local new_cachep = setmetatable({},{__mode="v"}) -- indexed on the original key (usually string), will store p_current
+--print("SPY new_gcache", new_gcache, "new_cachep", new_cachep)
+	local mt = {}
+	function mt.__index(_self,k)
+		assert(_self==p_current,"cheat!")
 		if k==__ then
 			return p_parent
 		elseif k==_ then
@@ -83,33 +101,60 @@ local function inode(p_parent, name, o_current, cachegetset)
 			return __pairs
 		elseif k==IPAIRS then
 			return __ipairs
+		elseif k==REQ then
+			return function(secret) return SECRET==secret end
+		elseif k==DEBUG then
+			return {cache=new_gcache, cachep=new_cachep}
 		end
 		local o_sub = o_current[k]
-		if o_sub == nil then return nil end
-		--if type(o_sub)~="table" then return o_sub end
+		if o_sub == nil then
+			-- the original data does not exists then
+			-- destroy the cache if exists
+			new_cachep[k]=nil
+			return nil
+		end
+		--if type(o_sub)~="table" then return o_sub end -- no proxy for non-table object
 
-		local p_sub = cachegetset(o_sub)
-		if p_sub then return p_sub end
-		p_sub = inode(p_current, k, o_sub, cachegetset)
-		return cachegetset(o_sub, p_sub)
---[[
-		return cachegetset(o_sub, function() return inode(p_current, k, o_sub, cachegetset) end)
-]]--
+		return internal_inode(p_current, k, o_sub, new_gcache, new_cachep)
 	end
---	function mt.__newindex(self,k_,v_)
---		-- v_ est ou n'est pas un proxy ?
---	end
+	function mt.__newindex(_self,k,v)
+		assert(_self==p_current,"cheat!")
+		-- v_ est ou n'est pas un proxy ?
+		if type(v)=="table" then
+			local ok = isproxy(v)
+			print("isproxy", ok)
+		end
+--		if v == nil then
+--			remove from cache if exists
+--		end
+	end
 	mt.__pairs = __pairs
 	mt.__ipairs = __ipairs
 	setmetatable(p_current,mt)
-	return cachegetset(o_current, p_current)
-end
-local function pub_inode(parent, name, current, cache)
-	if not cache then
-		local cache, isempty = cacheblackbox()
-		return inode(parent, name, current, cache), const, isempty
+	if type(o_current)=="table" then
+		gcache[o_current] = p_current
+--print("","gcache", gcache, "write ["..tostring(o_current).."]="..tostring(p_current))
+	else
+		parentcache[name] = p_current
+--print("","cachep", parentcache, "write ["..name.."]="..tostring(p_current))
 	end
-	return inode(parent, name, current, cache)
+	return p_current
+end
+local function pub_inode(o_current)
+	assert(o_current)
+	local cache, isempty = new()
+	return internal_inode(nil, "", o_current, cache, nil), const, isempty
+end
+
+do
+	local f = pub_inode({t={},"v","v"})
+	local x = f[REQ]
+	assert(x and x(SECRET))
+	assert(f.t==f.t)
+	assert(f[1]==f[1])
+	assert(f[1]~=f[2])
+	x,f=nil,nil
+
 end
 
 return pub_inode
