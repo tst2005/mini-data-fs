@@ -66,7 +66,7 @@ end
 
 local function inode(p_parent, name, o_current, cachegetset)
 	assert(cachegetset)
-	local p_current = cachegetset(current)
+	local p_current = cachegetset(o_current)
 	if p_current then return p_current end
 	p_current={}
 	local mt ={}
