@@ -75,6 +75,7 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 	local mt = {}
 	function mt.__index(_self,k)
 		assert(_self==p_current,"cheat!")
+		if k==nil then return nil end
 		if k==__ then
 			return p_parent
 		elseif k==_ then
@@ -142,12 +143,15 @@ end
 
 do
 	local f = pub_inode({t={},"v","v"})
+--[=[
 	local x = f[REQ]
 	assert(x and x(SECRET))
+]=]--
 	assert(f.t==f.t)
 	assert(f[1]==f[1])
 	assert(f[1]~=f[2])
-	x,f=nil,nil
+	f=nil
+--	x=nil
 end
 
 return pub_inode
