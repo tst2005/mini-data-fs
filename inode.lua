@@ -7,24 +7,22 @@ local IPAIRS={}	--
 local TYPE={}	-- get the original type
 local DEBUG={}	--
 
---[=[
 -- how to check if it is a proxy (internal use)
-local REQ={}
-local SECRET={}
---local ACK={}
-local function isproxy(v)
-	if type(v)=="table" then
-		local super,check = v[REQ]
-		if super==nil and type(check)=="function" and check(SECRET)==true then
-			return true
-		end
-	end
-end
-]=]--
+local ISPROXY={} -- non-proxy table can see this key request
 
-local ISPROXY={}
+-- simple version
 local function isproxy(v)
-	return type(v)=="table" and v[ISPROXY]==true
+	return type(v)=="table" and v[ISPROXY]
+end
+
+-- complexe version
+local SECRET,ACK
+local function isproxy(v)
+	SECRET,ACK={},{}
+	local ack
+	return pcall(function()
+		ack = v[ISPROXY](SECRET)
+	end) and ACK==ack
 end
 
 local const={[".."]=__,["."]=_,["raw"]=RAW,["pairs"]=PAIRS,["ipairs"]=IPAIRS,["type"]=TYPE}
@@ -102,10 +100,8 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 			return __pairs
 		elseif k==IPAIRS then
 			return __ipairs
---		elseif k==REQ then
---			return function(secret) return SECRET==secret end
 		elseif k==ISPROXY then
-			return true
+			return function(secret) return SECRET==secret and ACK end
 		elseif k==DEBUG then
 			return {
 				cache=gcache,

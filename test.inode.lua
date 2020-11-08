@@ -83,12 +83,12 @@ do
 	f.Nil = nil
 	f.EmptyTable = {}
 	f["foo"] = f.list
-	print(require"tprint"(data,{inline=false, recursivefound=function(t) return require"tprint"(t) end}))
 	assert(f.num[const.type]=="number")
 	assert(f.str[const.type]=="string")
 	assert(f.bool[const.type]=="boolean")
 	assert(f.Not[const.type]=="boolean")
 	assert(f.EmptyTable[const.type]=="table")
+--	print(require"tprint"(data,{inline=false, recursivefound=function(t) return require"tprint"(t) end}))
 end
 
 --session = { root=fs, dir=dir, pwd=[...], cache=... }
