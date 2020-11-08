@@ -34,6 +34,14 @@ local function isproxy(v)
 	end) and ACK==ack
 end
 
+local function sandbox_type(x)
+	local a = type(x)
+	if a~="table" or not isproxy(x) then
+		return a
+	else
+		return x[TYPE]
+	end
+end
 
 local function __rawtype(proxy)
 	return proxy[TYPE]
@@ -178,7 +186,7 @@ end
 local function pub_inode(o_current)
 	assert(o_current)
 	local gcache = setmetatable({},{__mode="v"}) -- indexed on the original table (o_current)
-	return internal_inode(nil, "", o_current, gcache, nil), const
+	return internal_inode(nil, "", o_current, gcache, nil), const, {type=sandbox_type}
 end
 
 do
