@@ -4,6 +4,7 @@ local _={}	-- "."
 local RAW={}	-- rawget
 local PAIRS={}	--
 local IPAIRS={}	--
+local TYPE={}	-- get the original type
 local DEBUG={}	--
 
 --[=[
@@ -26,8 +27,12 @@ local function isproxy(v)
 	return type(v)=="table" and v[ISPROXY]==true
 end
 
-local const={[".."]=__,["."]=_,["raw"]=RAW,["pairs"]=PAIRS,["ipairs"]=IPAIRS}
+local const={[".."]=__,["."]=_,["raw"]=RAW,["pairs"]=PAIRS,["ipairs"]=IPAIRS,["type"]=TYPE}
 const.DEBUG=DEBUG
+
+local function __type(proxy)
+	return proxy[TYPE]
+end
 
 local function __pairs(proxy)
 	local function _next(proxy, k)
@@ -37,6 +42,10 @@ local function __pairs(proxy)
 		if nil~=v then
 			return k, proxy[k] -- do not expose v without wrapper
 		end
+	end
+	local orig = proxy[RAW]
+	if type(orig)~="table" then
+		return next, {orig}, nil
 	end
 	return _next, proxy, nil
 end
@@ -71,6 +80,7 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 		end
 	end
 	p_current = {}
+	if p_parent==nil then p_parent=p_current end
 	local new_cachep = setmetatable({},{__mode="v"}) -- indexed on the original key (usually string), will store p_current
 	local mt = {}
 	function mt.__index(_self,k)
@@ -81,9 +91,13 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 		elseif k==_ then
 			return p_current
 		elseif k==RAW then
-			--print("parent", parent, "current", current, "name", name,])
-			if p_parent == nil then return o_current end
+			assert(p_parent~=nil)
+			if p_parent == p_current then -- the root is reached
+				return o_current
+			end
 			return p_parent[RAW][name]
+		elseif k==TYPE then
+			return type(p_current[RAW])
 		elseif k==PAIRS then
 			return __pairs
 		elseif k==IPAIRS then
@@ -116,9 +130,11 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 		assert(_self==p_current,"cheat!")
 		-- v_ est ou n'est pas un proxy ?
 		if type(v)=="table" then
-			local ok = isproxy(v)
-			print("isproxy", ok)
+			if isproxy(v) then
+				v = v[RAW]
+			end
 		end
+		o_current[k]=v
 --		if v == nil then
 --			remove from cache if exists
 --		end

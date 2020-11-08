@@ -18,7 +18,7 @@ assert(f.list[const[".."]] == f)
 assert(f.list[const["."]] == f.list)
 assert(f[const["."]] == f)
 
-assert(f[const[".."]] == nil)
+assert(f[const[".."]] == f)
 assert(f.list[const[".."]] == f)
 assert(f.list[1][const[".."]] == f.list)
 assert(f.list[2][const.raw] == data.list[2])
@@ -71,6 +71,24 @@ do
 	f=nil
 	collectgarbage() collectgarbage()
 	assert(cacheisempty()==true)
+end
+
+do
+	local f,const = inode(data)
+	f.toto = {"titi"}
+	f.num = 123
+	f.str = "abc"
+	f.bool = true
+	f.Not = false
+	f.Nil = nil
+	f.EmptyTable = {}
+	f["foo"] = f.list
+	print(require"tprint"(data,{inline=false, recursivefound=function(t) return require"tprint"(t) end}))
+	assert(f.num[const.type]=="number")
+	assert(f.str[const.type]=="string")
+	assert(f.bool[const.type]=="boolean")
+	assert(f.Not[const.type]=="boolean")
+	assert(f.EmptyTable[const.type]=="table")
 end
 
 --session = { root=fs, dir=dir, pwd=[...], cache=... }
