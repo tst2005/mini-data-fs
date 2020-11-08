@@ -1,14 +1,23 @@
 
-local __={}	-- ".."
-local _={}	-- "."
-local RAW={}	-- rawget
-local PAIRS={}	--
-local IPAIRS={}	--
-local TYPE={}	-- get the original type
-local DEBUG={}	--
+local function mark() return {} end
+local __=mark()	-- ".."
+local _=mark()	-- "."
+local RAW=mark()	-- rawget
+local PAIRS=mark()	-- pairs
+local IPAIRS=mark()	-- ipairs
+local TYPE=mark()	-- get the original type (proxy for a string  will be "string")
+local RAWTYPE=mark()	-- get the real     type (proxy for any value will be "table")
 
 -- how to check if it is a proxy (internal use)
-local ISPROXY={} -- non-proxy table can see this key request
+local ISPROXY=mark() -- non-proxy table can see this key request
+
+local const={__=__,_=_,RAW=RAW,PAIRS=PAIRS,IPAIRS=IPAIRS,TYPE=TYPE,RAWTYPE=RAWTYPE}
+
+local DEBUG=mark()	--
+const.DEBUG=DEBUG	--
+--const.ISPROXY = ISPROXY
+
+local type = type -- the standard lua type function
 
 -- simple version
 local function isproxy(v)
@@ -18,18 +27,26 @@ end
 -- complexe version
 local SECRET,ACK
 local function isproxy(v)
-	SECRET,ACK={},{}
+	SECRET,ACK=mark(),mark()
 	local ack
 	return pcall(function()
 		ack = v[ISPROXY](SECRET)
 	end) and ACK==ack
 end
 
-local const={[".."]=__,["."]=_,["raw"]=RAW,["pairs"]=PAIRS,["ipairs"]=IPAIRS,["type"]=TYPE}
-const.DEBUG=DEBUG
 
-local function __type(proxy)
+local function __rawtype(proxy)
 	return proxy[TYPE]
+end
+
+local typevalue={
+	[type(nil)]=true,
+	[type(true)]=true,
+	[type("")]=true,
+	[type(0)]=true,
+}
+local function isvalue(x)
+	return typevalue[type(x)] or false
 end
 
 local function __pairs(proxy)
@@ -62,7 +79,7 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 	local p_current
 	if type(o_current)=="table" then
 		p_current = gcache[o_current]
---if p_current then print("","gcache", gcache, "read ["..name.."]: "..tostring(p_current)) end
+--if p_current then print("","gcache", gcache, "read ["..name.."]: "../ostring(p_current)) end
 		if p_current then return p_current end
 	elseif parentcache then
 		-- o_current is a value like string/number/boolean
@@ -95,7 +112,9 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 			end
 			return p_parent[RAW][name]
 		elseif k==TYPE then
-			return type(p_current[RAW])
+			return type(p_current[RAW]) -- type(o_current) ?
+		elseif k==RAWTYPE then
+			return type(p_current)
 		elseif k==PAIRS then
 			return __pairs
 		elseif k==IPAIRS then
@@ -137,6 +156,15 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 	end
 	mt.__pairs = __pairs
 	mt.__ipairs = __ipairs
+	local rawtostringvalue = tostring(p_current):gsub("^table","proxy")
+	mt.__tostring = function(proxy)
+		local o = proxy[RAW] -- orig
+		if isvalue(o) then
+			return tostring(o)
+		else
+			return rawtostringvalue.."("..tostring(o)..")"
+		end
+	end
 	setmetatable(p_current,mt)
 	if type(o_current)=="table" then
 		gcache[o_current] = p_current
@@ -155,15 +183,10 @@ end
 
 do
 	local f = pub_inode({t={},"v","v"})
---[=[
-	local x = f[REQ]
-	assert(x and x(SECRET))
-]=]--
 	assert(f.t==f.t)
 	assert(f[1]==f[1])
 	assert(f[1]~=f[2])
 	f=nil
---	x=nil
 end
 
 return pub_inode
