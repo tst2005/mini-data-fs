@@ -7,15 +7,20 @@ local PAIRS=mark()	-- pairs
 local IPAIRS=mark()	-- ipairs
 local TYPE=mark()	-- get the original type (proxy for a string  will be "string")
 local RAWTYPE=mark()	-- get the real     type (proxy for any value will be "table")
+local KMAP=mark()	-- access the kmap
 
 -- how to check if it is a proxy (internal use)
 local ISPROXY=mark() -- non-proxy table can see this key request
 
-local const={__=__,_=_,RAW=RAW,PAIRS=PAIRS,IPAIRS=IPAIRS,TYPE=TYPE,RAWTYPE=RAWTYPE}
+local default_const={__=__,_=_,RAW=RAW,PAIRS=PAIRS,IPAIRS=IPAIRS,TYPE=TYPE,RAWTYPE=RAWTYPE,KMAP=KMAP}
+local function newkmap()
+	local kmap={}
+	for k,v in pairs(default_const) do kmap[k]=v end
+	return kmap
+end
 
 local DEBUG=mark()	--
-const.DEBUG=DEBUG	--
---const.ISPROXY = ISPROXY
+default_const.DEBUG=DEBUG	--
 
 local type = type -- the standard lua type function
 
@@ -82,7 +87,7 @@ local function __ipairs(proxy)
 	return _next, proxy, 0
 end
 
-local function internal_inode(p_parent, name, o_current, gcache, parentcache)
+local function internal_inode(p_parent, name, o_current, gcache, parentcache, kmap)
 	assert(gcache)
 	local p_current
 	if type(o_current)=="table" then
@@ -103,13 +108,21 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 		end
 	end
 	p_current = {}
+	if not kmap then
+		kmap=newkmap()
+	end
 	if p_parent==nil then p_parent=p_current end
 	local new_cachep = setmetatable({},{__mode="v"}) -- indexed on the original key (usually string), will store p_current
 	local mt = {}
 	function mt.__index(_self,k)
 		assert(_self==p_current,"cheat!")
+		local k2=kmap[k]
+		if k2==false then return nil end
+		k=k2 or k
 		if k==nil then return nil end
-		if k==__ then
+		if k==KMAP then
+			return kmap
+		elseif k==__ then
 			return p_parent
 		elseif k==_ then
 			return p_current
@@ -120,7 +133,7 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 			end
 			return p_parent[RAW][name]
 		elseif k==TYPE then
-			return type(p_current[RAW]) -- type(o_current) ?
+			return type(o_current) -- was: type(p_current[RAW])
 		elseif k==RAWTYPE then
 			return type(p_current)
 		elseif k==PAIRS then
@@ -147,10 +160,14 @@ local function internal_inode(p_parent, name, o_current, gcache, parentcache)
 		end
 		--if type(o_sub)~="table" then return o_sub end -- no proxy for non-table object
 
-		return internal_inode(p_current, k, o_sub, gcache, new_cachep)
+		return internal_inode(p_current, k, o_sub, gcache, new_cachep, kmap)
 	end
 	function mt.__newindex(_self,k,v)
 		assert(_self==p_current,"cheat!")
+		if k==KMAP then
+			kmap=v
+			return
+		end
 		-- v_ est ou n'est pas un proxy ?
 		if type(v)=="table" then
 			if isproxy(v) then
@@ -186,7 +203,9 @@ end
 local function pub_inode(o_current)
 	assert(o_current)
 	local gcache = setmetatable({},{__mode="v"}) -- indexed on the original table (o_current)
-	return internal_inode(nil, "", o_current, gcache, nil), const, {type=sandbox_type}
+	local ino = internal_inode(nil, "", o_current, gcache, nil, nil)
+	local kmap=ino[KMAP]
+	return ino, kmap, {type=sandbox_type}
 end
 
 do
